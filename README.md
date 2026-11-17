@@ -2,9 +2,6 @@
 
 # Order Cancellation Prediction
 
-Projeto de Machine Learning para análise e previsão de cancelamentos de pedidos em uma plataforma de delivery.
-
-O objetivo é investigar se informações disponíveis no momento do pedido podem ajudar a identificar pedidos com maior risco de cancelamento, utilizando técnicas de classificação supervisionada.
 
 > **Status:** em desenvolvimento — exploração dos dados, preparação, treinamento inicial, comparação de modelos e análise de thresholds realizados. Avaliação final no conjunto de teste ainda pendente.
 

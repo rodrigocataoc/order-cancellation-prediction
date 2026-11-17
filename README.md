@@ -226,8 +226,8 @@ Resultados registrados durante essa etapa:
 
 | Modelo | Threshold | Precision | Recall | F1-score |
 |---|---:|---:|---:|---:|
-| Regressão Logística | 0,5332 | 0,1133 | 0,4857 | 0,1838 |
-| Random Forest | 0,5536 | 0,3077 | 0,2286 | 0,2623 |
+| Regressão Logística | 0,5332 | 0,11 | 0,49 | 0,18 |
+| Random Forest | 0,5536 | 0,31 | 0,23 | 0,26 |
 
 O ajuste do threshold permite modificar o equilíbrio entre precision e recall sem alterar as probabilidades produzidas pelo modelo.
 
@@ -253,7 +253,7 @@ A Regressão Logística apresentou maior recall, enquanto o Random Forest aprese
 
 ```text
 [[347  18]
- [ 28   7]]
+ [ 27   8]]
 ```
 
 - Verdadeiros negativos: 347.

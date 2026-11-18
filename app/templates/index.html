@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Order Cancellation Prediction</title>
+  <style>
+    :root { --bg:#0f1419; --card:#1a2332; --border:#2d3a4f; --text:#e7ecf3; --muted:#8b9bb4; --accent:#3b82f6; --high:#ef4444; --low:#22c55e; --input:#0d1117; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:system-ui,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; line-height:1.5; }
+    .container { max-width:720px; margin:0 auto; padding:2rem 1.25rem 3rem; }
+    header { margin-bottom:2rem; }
+    header h1 { font-size:1.55rem; font-weight:700; }
+    header p { color:var(--muted); margin-top:.4rem; font-size:.95rem; }
+    .badge { display:inline-block; font-size:.7rem; text-transform:uppercase; letter-spacing:.06em; background:#1e3a5f; color:#93c5fd; padding:.2rem .55rem; border-radius:999px; margin-bottom:.75rem; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:1.5rem; margin-bottom:1.25rem; }
+    .card h2 { font-size:.95rem; font-weight:600; margin-bottom:1rem; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+    @media (max-width:560px){ .grid{ grid-template-columns:1fr; } }
+    label { display:block; font-size:.8rem; color:var(--muted); margin-bottom:.35rem; }
+    input, select { width:100%; background:var(--input); border:1px solid var(--border); border-radius:8px; padding:.65rem .75rem; color:var(--text); font-size:.95rem; outline:none; }
+    input:focus, select:focus { border-color:var(--accent); }
+    .actions { display:flex; gap:.75rem; margin-top:1.25rem; flex-wrap:wrap; }
+    button { border:none; border-radius:8px; padding:.7rem 1.25rem; font-size:.95rem; font-weight:600; cursor:pointer; }
+    button:disabled { opacity:.6; cursor:not-allowed; }
+    .btn-primary { background:var(--accent); color:#fff; }
+    .btn-ghost { background:transparent; color:var(--muted); border:1px solid var(--border); }
+    #result { display:none; } #result.visible { display:block; }
+    .risk { display:inline-flex; font-weight:700; font-size:1.1rem; padding:.35rem .75rem; border-radius:8px; margin-bottom:1rem; }
+    .risk.alto { background:rgba(239,68,68,.15); color:var(--high); }
+    .risk.baixo { background:rgba(34,197,94,.15); color:var(--low); }
+    .metrics { display:grid; grid-template-columns:repeat(3,1fr); gap:.75rem; margin-bottom:1rem; }
+    @media (max-width:560px){ .metrics{ grid-template-columns:1fr; } }
+    .metric { background:var(--input); border-radius:8px; padding:.75rem; text-align:center; }
+    .metric .label { font-size:.75rem; color:var(--muted); }
+    .metric .value { font-size:1.25rem; font-weight:700; margin-top:.15rem; }
+    .explanation { font-size:.9rem; color:var(--muted); border-left:3px solid var(--border); padding-left:.85rem; }
+    .error { background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.35); color:#fca5a5; border-radius:8px; padding:.85rem 1rem; font-size:.9rem; display:none; margin-bottom:1rem; }
+    .error.visible { display:block; }
+    footer { margin-top:2rem; font-size:.8rem; color:var(--muted); text-align:center; }
+    footer a { color:#93c5fd; text-decoration:none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <span class="badge">Portfólio · Machine Learning</span>
+      <h1>Previsão de Cancelamento de Pedidos</h1>
+      <p>Informe os dados do pedido no momento da compra. O modelo estima a probabilidade de cancelamento (dados sintéticos, uso educacional).</p>
+    </header>
+    <div id="error" class="error" role="alert"></div>
+    <div class="card">
+      <h2>Dados do pedido</h2>
+      <form id="predict-form" novalidate>
+        <div class="grid">
+          <div><label for="item_count">Quantidade de itens</label><input id="item_count" type="number" min="1" max="50" value="3" required /></div>
+          <div><label for="subtotal">Subtotal (R$)</label><input id="subtotal" type="number" min="0" step="0.01" value="62.50" required /></div>
+          <div><label for="delivery_fee">Taxa de entrega (R$)</label><input id="delivery_fee" type="number" min="0" step="0.01" value="4.99" required /></div>
+          <div><label for="estimated_delivery_min">Tempo estimado (min)</label><input id="estimated_delivery_min" type="number" min="1" max="180" value="40" required /></div>
+          <div><label for="order_hour">Hora do pedido (0–23)</label><input id="order_hour" type="number" min="0" max="23" value="20" required /></div>
+          <div>
+            <label for="order_weekday">Dia da semana</label>
+            <select id="order_weekday" required>
+              <option value="0">Segunda</option><option value="1">Terça</option><option value="2">Quarta</option>
+              <option value="3">Quinta</option><option value="4">Sexta</option><option value="5" selected>Sábado</option><option value="6">Domingo</option>
+            </select>
+          </div>
+        </div>
+        <div class="actions">
+          <button type="submit" class="btn-primary" id="submit-btn">Prever risco</button>
+          <button type="button" class="btn-ghost" id="reset-btn">Limpar</button>
+        </div>
+      </form>
+    </div>
+    <div id="result" class="card">
+      <h2>Resultado</h2>
+      <div id="risk-badge" class="risk"></div>
+      <div class="metrics">
+        <div class="metric"><div class="label">Probabilidade</div><div class="value" id="prob-value">—</div></div>
+        <div class="metric"><div class="label">Predição</div><div class="value" id="pred-value">—</div></div>
+        <div class="metric"><div class="label">Threshold</div><div class="value" id="th-value">—</div></div>
+      </div>
+      <p class="explanation" id="explanation"></p>
+    </div>
+    <footer>
+      <p>Modelo: Random Forest · F1 (validação) ≈ 0,26 · dados sintéticos (<a href="https://huggingface.co/datasets/mindweave/food-delivery-orders" target="_blank" rel="noopener">CC BY-NC 4.0</a>).</p>
+      <p style="margin-top:.35rem">API: <a href="/docs">/docs</a> · <a href="/health">/health</a> · <a href="/model-info">/model-info</a></p>
+    </footer>
+  </div>
+  <script>
+    const form = document.getElementById("predict-form");
+    const resultEl = document.getElementById("result");
+    const errorEl = document.getElementById("error");
+    const submitBtn = document.getElementById("submit-btn");
+    function showError(msg){ errorEl.textContent = msg; errorEl.classList.add("visible"); }
+    function clearError(){ errorEl.textContent = ""; errorEl.classList.remove("visible"); }
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault(); clearError(); resultEl.classList.remove("visible");
+      submitBtn.disabled = true; submitBtn.textContent = "Calculando…";
+      const payload = {
+        item_count: Number(document.getElementById("item_count").value),
+        subtotal: Number(document.getElementById("subtotal").value),
+        delivery_fee: Number(document.getElementById("delivery_fee").value),
+        estimated_delivery_min: Number(document.getElementById("estimated_delivery_min").value),
+        order_hour: Number(document.getElementById("order_hour").value),
+        order_weekday: Number(document.getElementById("order_weekday").value),
+      };
+      try {
+        const res = await fetch("/predict", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload) });
+        const data = await res.json();
+        if (!res.ok) {
+          const d = data.detail;
+          throw new Error(typeof d === "string" ? d : Array.isArray(d) ? d.map(x => x.msg || JSON.stringify(x)).join("; ") : "Erro na previsão.");
+        }
+        const badge = document.getElementById("risk-badge");
+        badge.className = "risk " + data.risk_label;
+        badge.textContent = data.risk_label === "alto" ? "Risco alto" : "Risco baixo";
+        document.getElementById("prob-value").textContent = (data.probability * 100).toFixed(1) + "%";
+        document.getElementById("pred-value").textContent = data.prediction === 1 ? "Cancelado" : "Entregue";
+        document.getElementById("th-value").textContent = (data.threshold * 100).toFixed(1) + "%";
+        document.getElementById("explanation").textContent = data.explanation;
+        resultEl.classList.add("visible");
+      } catch (err) { showError(err.message || "Falha ao consultar a API."); }
+      finally { submitBtn.disabled = false; submitBtn.textContent = "Prever risco"; }
+    });
+    document.getElementById("reset-btn").addEventListener("click", () => {
+      form.reset();
+      document.getElementById("item_count").value = 3;
+      document.getElementById("subtotal").value = 62.5;
+      document.getElementById("delivery_fee").value = 4.99;
+      document.getElementById("estimated_delivery_min").value = 40;
+      document.getElementById("order_hour").value = 20;
+      document.getElementById("order_weekday").value = 5;
+      resultEl.classList.remove("visible"); clearError();
+    });
+  </script>
+</body>
+</html>

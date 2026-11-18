@@ -1,162 +1,91 @@
 # Order Cancellation Prediction
 
-> Portfólio de Machine Learning: prever se um pedido de delivery será **entregue** ou **cancelado**.
+> Portfólio de Machine Learning + API: prever se um pedido de delivery será **entregue** ou **cancelado**.
 
 **Autor:** Rodrigo Catão  
-**Foco:** estágio / primeiro emprego em IA, ML e Ciência de Dados  
-**Status:** validado, notebook reproduzível, modelo exportado para inferência
+**Objetivo:** estágio / primeiro emprego em IA, ML e Ciência de Dados  
+**Stack:** scikit-learn · FastAPI · Pydantic · pytest
 
 ---
 
-## Problema de negócio
+## Visão geral
 
-Cancelamentos geram custo e ineficiência. O modelo usa apenas informações disponíveis **no momento do pedido** para sinalizar risco de cancelamento.
+Classificação binária com features disponíveis **no momento do pedido** (sem data leakage).
 
 | Classe | Significado |
 |--------|-------------|
 | `0` | Entregue |
 | `1` | Cancelado |
 
-Com ~91% de entregas, **acurácia isolada é enganosa**: um classificador que sempre prevê “entregue” já acerta 91,5%.
+Com ~91% de entregas, **acurácia isolada é enganosa**. O baseline (`DummyClassifier`) atinge 91,5% sem identificar nenhum cancelamento.
+
+**Dataset:** [mindweave/food-delivery-orders](https://huggingface.co/datasets/mindweave/food-delivery-orders) (sintético, **CC BY-NC 4.0** — atribuição; uso comercial não permitido).
 
 ---
 
-## Dataset
+## Demonstração rápida
 
-- **Fonte:** [mindweave/food-delivery-orders](https://huggingface.co/datasets/mindweave/food-delivery-orders)
-- **Tipo:** sintético (não representa operação real)
-- **Amostra:** 2.000 pedidos · 1.828 entregues (91,4%) · 172 cancelados (8,6%)
-- **Licença:** [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) (atribuição; uso comercial não permitido)
-- O CSV **não** está no repositório — veja `data/README.md`
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+# Confirme: ls models/cancellation_rf_pipeline.joblib
+uvicorn app.main:app --reload --port 8000
+```
 
-![Distribuição das classes](images/class_distribution.png)
+- Interface: http://127.0.0.1:8000  
+- Docs OpenAPI: http://127.0.0.1:8000/docs  
+- Health: http://127.0.0.1:8000/health  
 
----
-
-## Features (sem data leakage)
-
-| Feature | Descrição |
-|---------|-----------|
-| `item_count` | Qtd. de itens |
-| `subtotal` | Valor dos produtos |
-| `delivery_fee` | Taxa de entrega |
-| `estimated_delivery_min` | Tempo estimado |
-| `order_hour` | Hora do pedido |
-| `order_weekday` | Dia da semana (0–6) |
-
-**Excluídas de propósito:** `actual_delivery_min`, `cancellation_reason`, `rating` (pós-evento), IDs, `tip`, `total`.
+```bash
+curl -X POST http://127.0.0.1:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"item_count":3,"subtotal":62.5,"delivery_fee":4.99,"estimated_delivery_min":40,"order_hour":20,"order_weekday":5}'
+```
 
 ---
 
-## Modelos e validação
+## Modelo
 
-- Split estratificado: ~1.200 treino / 400 validação / 400 teste (`random_state=42`)
-- Threshold que maximiza **F1** escolhido **somente na validação**
-- Pipelines scikit-learn (scaler só no treino, quando aplicável)
+| Item | Valor |
+|------|--------|
+| Algoritmo | RandomForestClassifier |
+| Pipeline | scikit-learn Pipeline |
+| `n_estimators` | 300 |
+| `max_depth` | 5 |
+| `class_weight` | balanced |
+| `random_state` | 42 |
+| Threshold (F1 máx. na validação) | ≈ **0,5997** |
+| Artefato | `models/cancellation_rf_pipeline.joblib` |
 
-### Baseline (`DummyClassifier`, most_frequent)
+### Features (sem leakage)
 
-- Accuracy no teste: **0,915** (não identifica cancelamentos)
+`item_count`, `subtotal`, `delivery_fee`, `estimated_delivery_min`, `order_hour`, `order_weekday`
 
-### Validação — threshold 0,50
+Excluídas: `actual_delivery_min`, `cancellation_reason`, `rating`, IDs, `tip`, `total`.
 
-| Métrica | Regressão Logística | Random Forest |
-|---------|--------------------:|--------------:|
-| Accuracy | 0,4950 | 0,6325 |
-| Precision | 0,0927 | 0,1111 |
-| Recall | 0,5429 | 0,4571 |
-| F1-score | 0,1583 | 0,1788 |
-| PR-AUC | 0,1240 | 0,1668 |
-| ROC-AUC | 0,5354 | 0,5220 |
-
-### Validação — threshold que maximiza F1
+### Métricas na validação (threshold ótimo F1)
 
 | Modelo | Threshold | Precision | Recall | F1 |
 |--------|----------:|----------:|-------:|---:|
 | Regressão Logística | ≈ 0,533 | 0,113 | 0,486 | 0,184 |
 | **Random Forest** | ≈ 0,600 | **0,308** | 0,229 | **0,262** |
 
-**Matriz LR (validação, th≈0,533):** `[[232, 133], [18, 17]]`  
-**Matriz RF (validação, th≈0,600):** `[[347, 18], [27, 8]]`
+Matriz RF (validação): `[[347, 18], [27, 8]]`
 
-![Matriz LR](images/confusion_matrix_logistic_regression.png)
-
-![Matriz RF](images/confusion_matrix_random_forest.png)
-
-![Curva PR](images/precision_recall_curve.png)
-
-### Importância das features (RF)
-
-| Feature | Importância |
-|---------|------------:|
-| subtotal | ≈ 0,296 |
-| estimated_delivery_min | ≈ 0,237 |
-| order_weekday | ≈ 0,226 |
-| order_hour | ≈ 0,187 |
-| item_count | ≈ 0,054 |
-| delivery_fee | 0,000 |
-
-![Feature importance](images/feature_importance.png)
-
-### Interpretação
-
-- **LR:** maior recall → mais cancelamentos capturados, muitos falsos positivos.
-- **RF:** maior precision e F1 na validação → menos alertas incorretos, perde mais cancelamentos.
-- Desempenho **modesto**; adequado para aprendizado e portfólio, não para produção com estes dados.
-
-### Nota sobre o conjunto de teste
-
-O teste **já foi usado** em avaliações anteriores da Regressão Logística. Não tratá-lo como hold-out intocado. Métricas de teste no notebook existem só para referência, com essa limitação explícita.
+**Interpretação:** desempenho modesto — adequado a portfólio e estudo, não a produção com estes dados. O teste já foi inspecionado em experimentos anteriores e não deve ser tratado como hold-out intocado.
 
 ---
 
-## Como reproduzir
+## API
 
-```bash
-git clone https://github.com/rodrigocataoc/order-cancellation-prediction.git
-cd order-cancellation-prediction
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| `GET` | `/` | Interface web |
+| `GET` | `/health` | Saúde da API e do modelo |
+| `GET` | `/model-info` | Metadados e métricas |
+| `POST` | `/predict` | Previsão de risco |
 
-python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-
-pip install -r requirements.txt
-
-# Baixe data/orders.csv (ver data/README.md)
-
-jupyter notebook notebooks/01_data_exploration.ipynb
-# Execute todas as células — gráficos em images/ e modelo em models/
-```
-
----
-
-## Inferência com o modelo salvo
-
-Após executar o notebook:
-
-```python
-import joblib, json
-import pandas as pd
-
-pipe = joblib.load("models/cancellation_rf_pipeline.joblib")
-meta = json.loads(open("models/model_metadata.json").read())
-th = meta["threshold"]
-
-row = pd.DataFrame([{
-    "item_count": 3,
-    "subtotal": 62.5,
-    "delivery_fee": 4.99,
-    "estimated_delivery_min": 40,
-    "order_hour": 20,
-    "order_weekday": 5,
-}])
-proba = pipe.predict_proba(row)[0, 1]
-pred = int(proba >= th)
-print(proba, pred)  # probabilidade e 0/1
-```
-
-Helper: `src/predict.py` (`predict_cancellation`).
-
-Modelo exportado: **Random Forest** (melhor F1 na validação), treinado em treino+validação, threshold da validação.
+Detalhes: [docs/API.md](docs/API.md)
 
 ---
 
@@ -164,47 +93,55 @@ Modelo exportado: **Random Forest** (melhor F1 na validação), treinado em trei
 
 ```text
 order-cancellation-prediction/
-├── README.md
-├── requirements.txt
-├── .gitignore
-├── data/
-│   └── README.md
-├── notebooks/
-│   └── 01_data_exploration.ipynb
+├── app/
+│   ├── main.py              # FastAPI
+│   ├── schemas.py           # Pydantic
+│   └── templates/index.html # Interface
+├── src/predict.py           # Inferência
 ├── models/
-│   ├── cancellation_rf_pipeline.joblib   # gerado ao rodar o notebook
+│   ├── cancellation_rf_pipeline.joblib
 │   └── model_metadata.json
-├── src/
-│   └── predict.py
-└── images/
-    ├── class_distribution.png
-    ├── confusion_matrix_logistic_regression.png
-    ├── confusion_matrix_random_forest.png
-    ├── precision_recall_curve.png
-    └── feature_importance.png
+├── scripts/train_and_export.py
+├── notebooks/01_data_exploration.ipynb
+├── tests/                   # pytest
+├── docs/API.md · docs/DEPLOY.md
+├── Dockerfile · render.yaml
+├── requirements.txt
+└── README.md
 ```
 
 ---
 
-## Limitações
+## Desenvolvimento
 
-1. Dados sintéticos  
-2. Poucos eventos da classe positiva (172)  
-3. Poder preditivo limitado  
-4. Teste já inspecionado historicamente  
-5. Features restritas ao instante do pedido  
+```bash
+pip install -r requirements.txt
+
+# Testes
+pytest -v
+
+# Treinar / exportar modelo e gráficos (precisa de data/orders.csv)
+python scripts/train_and_export.py
+```
+
+Instruções de deploy (local, Docker, Render): [docs/DEPLOY.md](docs/DEPLOY.md)
 
 ---
 
-## Tecnologias
+## Limitações (transparência)
 
-Python · pandas · NumPy · scikit-learn · matplotlib · seaborn · joblib · Jupyter
+1. Dados **sintéticos** — não representam operação real.  
+2. Poucos eventos da classe positiva (172 cancelamentos).  
+3. Poder preditivo limitado (F1 ≈ 0,26 na validação).  
+4. Conjunto de teste já visto em avaliações anteriores da Regressão Logística.  
+5. Licença dos dados: **CC BY-NC 4.0** (não comercial).
 
 ---
 
 ## Licença dos dados
 
-[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) — atribuição obrigatória; uso comercial não permitido.
+[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) — atribuição obrigatória; uso comercial **não** permitido.  
+Fonte: [mindweave/food-delivery-orders](https://huggingface.co/datasets/mindweave/food-delivery-orders)
 
 ---
 

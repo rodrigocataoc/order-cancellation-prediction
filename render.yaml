@@ -1,0 +1,13 @@
+# Blueprint Render — https://render.com
+# Deploy: conecte o repositório e use este arquivo, ou configure manualmente.
+
+services:
+  - type: web
+    name: order-cancellation-prediction
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"

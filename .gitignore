@@ -1,7 +1,7 @@
-# Data files (download from Hugging Face)
+# Data files (download from Hugging Face — CC BY-NC 4.0)
 data/*.csv
 data/**/*.csv
-*.csv
+!data/README.md
 
 # Virtual environments
 venv/
@@ -15,6 +15,9 @@ __pycache__/
 *$py.class
 *.so
 .Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 # Jupyter
 .ipynb_checkpoints/
@@ -32,16 +35,19 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# Build / logs
+# Build / logs / coverage
 dist/
 build/
 *.egg-info/
 *.log
 .coverage
 htmlcov/
+coverage.xml
 
-# Model artifacts (if generated later)
+# Other model formats (keep the production joblib)
 models/*.pkl
-models/*.joblib
 *.pkl
-*.joblib
+
+# Allow the trained pipeline used by the API
+!models/cancellation_rf_pipeline.joblib
+!models/model_metadata.json

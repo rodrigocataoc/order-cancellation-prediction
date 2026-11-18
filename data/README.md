@@ -1,19 +1,29 @@
 # Dados do Projeto
 
-Esta pasta armazena os dados utilizados no projeto **Order Cancellation Prediction**, desenvolvido com o objetivo de analisar e prever cancelamentos de pedidos de delivery utilizando técnicas de Machine Learning.
+Esta pasta é o local esperado para o arquivo de dados utilizado no projeto **Order Cancellation Prediction**.
 
-## Fonte dos dados
+## Origem
 
-Dataset: [Food Delivery Orders – Hugging Face](https://huggingface.co/datasets/mindweave/food-delivery-orders)
+- **Dataset:** [Food Delivery Orders — Hugging Face](https://huggingface.co/datasets/mindweave/food-delivery-orders)
+- **Arquivo no repositório da fonte:** `data/orders.csv`
+- **Tipo:** dados sintéticos (não representam dados reais de nenhuma plataforma de delivery)
+- **Amostra utilizada:** 2.000 registros de pedidos
+- **Licença:** [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) — exige atribuição e **não permite uso comercial**
 
-- Origem: dados sintéticos.
-- Amostra utilizada: 2.000 registros.
-- Licença: CC BY-NC 4.0.
+## Como obter os dados
 
-## Observação
+1. Acesse: https://huggingface.co/datasets/mindweave/food-delivery-orders
+2. Baixe o arquivo `data/orders.csv` (ou use a API do Hugging Face / `datasets`)
+3. Salve o arquivo neste diretório com o nome:
 
-Os dados são utilizados exclusivamente para fins educacionais e de desenvolvimento de portfólio.
+```text
+data/orders.csv
+```
 
-Agradecimentos à fonte original pela disponibilização do dataset.
+## Observações
 
-**Nota:** o arquivo de dados (`orders.csv`) não é versionado no repositório. Baixe a amostra diretamente da fonte original no Hugging Face se precisar reproduzir o experimento.
+- O CSV **não é versionado** neste repositório (tamanho, licença e boa prática de não publicar dados desnecessariamente).
+- Os dados são utilizados exclusivamente para fins educacionais e de desenvolvimento de portfólio.
+- Mantenha a atribuição à fonte original em qualquer reutilização permitida pela licença.
+
+**Agradecimentos:** Mindweave Technologies pela disponibilização do dataset sintético.

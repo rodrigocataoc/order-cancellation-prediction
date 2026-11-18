@@ -1,369 +1,303 @@
-# order-cancellation-prediction
-
 # Order Cancellation Prediction
 
-
-> **Status:** em desenvolvimento — exploração dos dados, preparação, treinamento inicial, comparação de modelos e análise de thresholds realizados. Avaliação final no conjunto de teste ainda pendente.
-
-## 1. Objetivo do projeto
-
-O cancelamento de pedidos é um desafio operacional para plataformas de delivery. Identificar antecipadamente pedidos com maior risco de cancelamento pode ajudar a direcionar ações preventivas e melhorar a eficiência da operação.
-
-Neste projeto, desenvolvo modelos de classificação binária para prever se um pedido será:
-
-- `0`: Entregue.
-- `1`: Cancelado.
-
-O foco não é apenas obter uma boa acurácia, mas investigar a capacidade dos modelos de identificar cancelamentos, considerando o desbalanceamento das classes e os custos de falsos positivos e falsos negativos.
-
-## 2. Dataset
-
-**Fonte:** [Food Delivery Orders — Hugging Face](https://huggingface.co/datasets/mindweave/food-delivery-orders)
-
-O dataset disponibiliza informações de pedidos de uma operação fictícia de delivery.
-
-Características da amostra utilizada:
-
-- 2.000 pedidos.
-- 500 clientes.
-- 10 entregadores.
-- 20 restaurantes.
-- 16 colunas originais.
-
-**Importante:** os dados são sintéticos. Não representam dados reais do iFood ou de qualquer outra plataforma de delivery.
-
-**Licença da fonte:** CC BY-NC 4.0. Consulte os termos da licença antes de reutilizar ou redistribuir os dados, especialmente em contextos comerciais. Atribuição à fonte original deve ser mantida.
-
-## 3. Análise exploratória dos dados (EDA)
-
-A primeira etapa foi compreender a estrutura, a distribuição das classes, os valores ausentes e as características dos pedidos.
-
-### Distribuição da variável-alvo
-
-| Status | Quantidade | Proporção |
-|---|---:|---:|
-| Entregue | 1.828 | 91,4% |
-| Cancelado | 172 | 8,6% |
-| **Total** | **2.000** | **100%** |
-
-Foi identificado um desbalanceamento significativo entre as classes. Apenas 8,6% dos pedidos da amostra foram cancelados.
-
-Esse cenário exige cuidado na escolha das métricas, pois um modelo pode apresentar alta acurácia simplesmente prevendo a classe majoritária.
-
-### Valores ausentes
-
-Foram identificados valores ausentes nas seguintes colunas:
-
-| Coluna | Valores ausentes |
-|---|---:|
-| `actual_delivery_min` | 172 |
-| `cancellation_reason` | 1.828 |
-| `rating` | 172 |
-
-Esses valores estão relacionados ao resultado do pedido: pedidos cancelados não possuem tempo real de entrega ou avaliação, enquanto pedidos entregues não possuem motivo de cancelamento.
-
-Não foram encontrados registros duplicados.
-
-### Motivos de cancelamento
-
-| Motivo | Quantidade |
-|---|---:|
-| Customer changed mind | 31 |
-| Customer unreachable at delivery | 24 |
-| Weather conditions | 24 |
-| Item unavailable | 22 |
-| Excessive wait time | 22 |
-| Restaurant too busy | 21 |
-| No drivers available | 18 |
-| Restaurant closed unexpectedly | 10 |
-
-### Análise temporal
-
-Na análise por horário, 20h apresentou a maior taxa de cancelamento, aproximadamente 12,44%, com 28 cancelamentos em 225 pedidos.
-
-O horário das 18h apresentou o maior número absoluto de cancelamentos: 30.
-
-Essas observações são exploratórias e não demonstram, por si só, uma relação causal.
-
-## 4. Preparação dos dados e prevenção de Data Leakage
-
-A variável-alvo foi construída a partir da coluna `status`:
-
-- `cancelled` → 1
-- `delivered` → 0
-
-Foram selecionadas inicialmente seis variáveis preditoras:
-
-| Variável | Descrição |
-|---|---|
-| `item_count` | Quantidade de itens do pedido |
-| `subtotal` | Valor dos produtos |
-| `delivery_fee` | Taxa de entrega |
-| `estimated_delivery_min` | Tempo estimado de entrega |
-| `order_hour` | Hora em que o pedido foi realizado |
-| `order_weekday` | Dia da semana do pedido |
-
-As variáveis temporais foram extraídas de `order_timestamp`.
-
-### Variáveis excluídas
-
-Algumas colunas foram removidas para evitar vazamento de informação (*data leakage*) ou por não serem adequadas ao cenário inicial de previsão:
-
-- `actual_delivery_min`: informação conhecida após o evento de entrega.
-- `cancellation_reason`: motivo conhecido após o cancelamento.
-- `rating`: avaliação posterior ao pedido.
-- `id`, `customer_id`, `restaurant_id` e `driver_id`: identificadores inicialmente excluídos.
-- `tip` e `total`: excluídos inicialmente por questões de disponibilidade no momento da previsão e possível redundância com outras informações.
-
-A exclusão de `driver_id` também considera que essa informação pode não estar disponível no momento em que o pedido é realizado.
-
-A prevenção de data leakage é importante para que o modelo utilize somente informações que poderiam estar disponíveis no momento real da previsão.
-
-## 5. Estratégia de validação
-
-Foi utilizado `train_test_split` com divisão estratificada para preservar a proporção das classes.
-
-Divisão inicial:
-
-- Treinamento: 80% — 1.600 registros.
-- Teste: 20% — 400 registros.
-
-A divisão inicial utilizou `random_state=42` e `stratify=y`.
-
-Posteriormente, o conjunto de treinamento foi dividido novamente:
-
-- Subconjunto de treinamento: 1.200 registros.
-- Validação: 400 registros.
-
-A validação também foi estratificada, com `random_state=42`.
-
-Distribuição da validação:
-
-| Classe | Quantidade |
-|---|---:|
-| Entregue | 365 |
-| Cancelado | 35 |
-| **Total** | **400** |
-
-O conjunto de validação foi utilizado para comparar modelos e selecionar thresholds. O conjunto de teste foi reservado para a avaliação final independente.
-
-## 6. Modelos desenvolvidos
-
-### 6.1 Baseline
-
-Foi utilizado um `DummyClassifier` com estratégia `most_frequent`.
-
-Esse modelo sempre prevê a classe majoritária, servindo como referência simples para avaliar a utilidade dos modelos treinados.
-
-Na avaliação preliminar realizada no conjunto de teste, apresentou acurácia de 91,5%.
-
-Esse resultado demonstra por que a acurácia isolada não é uma métrica adequada para avaliar o problema: um classificador pode acertar a maioria dos pedidos entregues sem identificar os cancelamentos.
-
-### 6.2 Regressão Logística
-
-Foi implementado um pipeline contendo:
-
-- `StandardScaler` para padronização das variáveis.
-- `LogisticRegression` para classificação.
-- `class_weight="balanced"` para lidar com o desbalanceamento das classes.
-- `max_iter=1000`.
-- `random_state=42`.
-
-O modelo foi treinado inicialmente no subconjunto de treinamento da validação.
-
-### 6.3 Random Forest
-
-Também foi desenvolvido um modelo Random Forest com os seguintes parâmetros:
-
-- `n_estimators=300`
-- `max_depth=5`
-- `min_samples_split=10`
-- `min_samples_leaf=5`
-- `class_weight="balanced"`
-- `random_state=42`
-
-O objetivo foi testar um algoritmo baseado em árvores de decisão e comparar seu comportamento com a Regressão Logística.
-
-## 7. Métricas de avaliação
-
-Devido ao desbalanceamento das classes, foram consideradas as seguintes métricas:
-
-- **Accuracy:** proporção geral de previsões corretas.
-- **Precision:** proporção de pedidos sinalizados como cancelados que realmente foram cancelados.
-- **Recall:** proporção dos cancelamentos reais identificados pelo modelo.
-- **F1-score:** equilíbrio entre precision e recall.
-- **PR-AUC:** área sob a curva Precision-Recall, especialmente útil em problemas com classes desbalanceadas.
-- **ROC-AUC:** capacidade de discriminação entre as classes.
-
-A análise também considera a matriz de confusão para identificar falsos positivos e falsos negativos.
-
-## 8. Resultados experimentais
-
-### Comparação na validação — threshold padrão
-
-Os resultados abaixo foram obtidos na mesma validação de 400 registros, utilizando o threshold padrão de 0,50.
-
-| Métrica | Regressão Logística | Random Forest |
-|---|---:|---:|
-| Accuracy | 0,4950 | 0,7625 |
-| Precision | 0,0927 | 0,1250 |
-| Recall | 0,5429 | 0,2857 |
-| F1-score | 0,1583 | 0,1739 |
-| PR-AUC | 0,1240 | 0,1700 |
-| ROC-AUC | 0,5354 | 0,5209 |
-
-O Random Forest apresentou maior acurácia, precision, F1-score e PR-AUC.
-
-A Regressão Logística apresentou maior recall e ROC-AUC.
-
-Os resultados mostram que os modelos possuem comportamentos diferentes e que nenhum deles apresenta, até o momento, desempenho suficientemente forte para uma aplicação real.
-
-### 8.1 Ajuste de threshold
-
-Foi realizada uma análise da curva Precision-Recall e uma busca pelo threshold que maximiza o F1-score na validação.
-
-Resultados registrados durante essa etapa:
-
-| Modelo | Threshold | Precision | Recall | F1-score |
-|---|---:|---:|---:|---:|
-| Regressão Logística | 0,5332 | 0,11 | 0,49 | 0,18 |
-| Random Forest | 0,5536 | 0,31 | 0,23 | 0,26 |
-
-O ajuste do threshold permite modificar o equilíbrio entre precision e recall sem alterar as probabilidades produzidas pelo modelo.
-
-A Regressão Logística apresentou maior recall, enquanto o Random Forest apresentou maior precision e F1-score nessa tabela experimental.
-
-**Nota de verificação:** a matriz de confusão posteriormente registrada para o Random Forest foi `[[347, 18], [28, 7]]`. Ela corresponde a precision de 0,28, recall de 0,20 e F1-score de aproximadamente 0,2333, diferentes dos valores da tabela de thresholds. Essa divergência precisa ser conferida no notebook antes de consolidar os resultados finais.
-
-### 8.2 Matrizes de confusão após ajuste de threshold
-
-**Regressão Logística**
-
-```text
-[[232 133]
- [ 18  17]]
-```
-
-- Verdadeiros negativos: 232.
-- Falsos positivos: 133.
-- Falsos negativos: 18.
-- Verdadeiros positivos: 17.
-
-**Random Forest**
-
-```text
-[[347  18]
- [ 27   8]]
-```
-
-- Verdadeiros negativos: 347.
-- Falsos positivos: 18.
-- Falsos negativos: 28.
-- Verdadeiros positivos: 7.
-
-Esses resultados evidenciam uma diferença operacional importante:
-
-- A Regressão Logística identifica mais cancelamentos, mas gera mais alertas incorretos.
-- O Random Forest gera menos alertas incorretos, mas deixa passar mais cancelamentos.
-
-A escolha entre os modelos depende do custo operacional associado a cada tipo de erro.
-
-## 9. Importância das variáveis — Random Forest
-
-A análise inicial de importância das features apresentou os seguintes resultados:
-
-| Variável | Importância |
-|---|---:|
-| `subtotal` | 0,298413 |
-| `estimated_delivery_min` | 0,238492 |
-| `order_weekday` | 0,206237 |
-| `order_hour` | 0,192754 |
-| `item_count` | 0,064104 |
-| `delivery_fee` | 0,000000 |
-
-As variáveis `subtotal`, `estimated_delivery_min`, `order_weekday` e `order_hour` concentraram a maior parte da importância calculada pelo modelo.
-
-Essa importância representa a contribuição das variáveis nas divisões das árvores e não deve ser interpretada como causalidade.
-
-## 10. Limitações atuais
-
-O projeto possui limitações que precisam ser consideradas:
-
-1. **Dados sintéticos:** o dataset não representa o comportamento real de uma plataforma de delivery.
-2. **Tamanho da amostra:** foram utilizados 2.000 registros, com apenas 172 cancelamentos.
-3. **Desbalanceamento:** a classe de cancelamentos representa somente 8,6% dos dados.
-4. **Capacidade preditiva:** os resultados atuais ainda são modestos.
-5. **Generalização:** os resultados precisam ser avaliados em dados independentes e, idealmente, em dados reais.
-6. **Variáveis disponíveis:** algumas informações podem não estar disponíveis no momento em que a previsão precisa ser realizada.
-
-Os resultados apresentados são experimentais e não demonstram capacidade de previsão em uma operação real.
-
-## 11. Próximas etapas
-
-- [ ] Conferir a divergência entre os resultados de threshold e a matriz de confusão do Random Forest.
-- [ ] Realizar a avaliação final no conjunto de teste reservado.
-- [ ] Comparar os resultados finais dos modelos.
-- [ ] Investigar outras estratégias para lidar com o desbalanceamento.
-- [ ] Avaliar a calibração das probabilidades.
-- [ ] Investigar outras variáveis e possibilidades de engenharia de atributos.
-- [ ] Documentar os resultados finais e as limitações.
-- [ ] Organizar o notebook e os arquivos para reprodução do experimento.
-
-## 12. Tecnologias utilizadas
-
-- Python
-- Pandas
-- NumPy
-- Matplotlib
-- Scikit-learn
-- Google Colab
-- Hugging Face Datasets
-
-## 13. Estrutura do projeto
-
-Estrutura sugerida para o repositório:
-
-```text
-order-cancellation-prediction/
-│
-├── README.md
-│
-├── notebooks/
-│   └── 01_data_exploration.ipynb
-│
-├── data/
-│   └── README.md
-│
-├── images/
-│   ├── class_distribution.png
-│   ├── precision_recall_curve.png
-│   └── feature_importance.png
-│
-└── requirements.txt
-```
-
-Os dados não precisam ser incluídos no repositório. O arquivo `data/README.md` pode explicar como obter a amostra diretamente da fonte original.
-
-## 14. Objetivo de aprendizado
-
-Este projeto faz parte do meu desenvolvimento em Machine Learning e Engenharia de Inteligência Artificial.
-
-O trabalho busca desenvolver habilidades práticas em:
-
-- Análise exploratória de dados.
-- Preparação de dados para Machine Learning.
-- Prevenção de data leakage.
-- Classificação supervisionada.
-- Tratamento de classes desbalanceadas.
-- Avaliação e comparação de modelos.
-- Ajuste de threshold.
-- Interpretação de métricas e resultados.
-- Análise de problemas sob a perspectiva de negócio.
+> Projeto de portfólio em Machine Learning: previsão de cancelamento de pedidos de delivery com dados sintéticos.
+
+**Autor:** Rodrigo Catão  
+**Objetivo de carreira:** estágio / primeiro emprego em Inteligência Artificial, Machine Learning e Ciência de Dados  
+**Status:** experimentos documentados, notebook reproduzível e repositório organizado
 
 ---
 
+## 1. Título e descrição
+
+Este projeto desenvolve e avalia modelos de **classificação binária** para prever se um pedido de delivery será **entregue** ou **cancelado**, utilizando apenas informações que estariam disponíveis no momento do pedido.
+
+O foco está em:
+
+- Prevenção de **data leakage**
+- Tratamento consciente do **desbalanceamento de classes**
+- Escolha e interpretação de **métricas adequadas** (Precision, Recall, F1, PR-AUC, matriz de confusão)
+- Documentação técnica clara e reproduzível
+
+---
+
+## 2. Problema de negócio
+
+Cancelamentos geram custo operacional, frustração do cliente e ineficiência na alocação de entregadores e restaurantes. Identificar antecipadamente pedidos com maior risco de cancelamento pode apoiar ações preventivas (confirmação, priorização, comunicação).
+
+O modelo deve sinalizar o risco **antes** do desfecho do pedido.
+
+---
+
+## 3. Objetivo do modelo
+
+Classificação binária:
+
+| Classe | Significado   |
+|--------|---------------|
+| `0`    | Entregue      |
+| `1`    | Cancelado     |
+
+O sucesso não é medido só por acurácia. Em um cenário com ~91% de entregas, um modelo que sempre prevê “entregue” já atinge alta acurácia sem identificar nenhum cancelamento.
+
+---
+
+## 4. Origem e características do dataset
+
+**Fonte:** [mindweave/food-delivery-orders](https://huggingface.co/datasets/mindweave/food-delivery-orders) (Hugging Face)
+
+| Característica              | Valor                          |
+|----------------------------|--------------------------------|
+| Tipo                       | Sintético                      |
+| Registros utilizados       | 2.000                          |
+| Colunas originais          | 16                             |
+| Pedidos entregues          | 1.828 (91,4%)                  |
+| Pedidos cancelados         | 172 (8,6%)                     |
+| Licença                    | CC BY-NC 4.0 (atribuição + não comercial) |
+
+**Importante:** os dados **não** representam operação real de nenhuma plataforma (incluindo iFood).
+
+O arquivo de dados **não** está no repositório. Veja `data/README.md` para instruções de download.
+
+---
+
+## 5. Análise exploratória (resumo)
+
+- Desbalanceamento acentuado da variável-alvo.
+- Valores ausentes concentrados em colunas pós-evento (`actual_delivery_min`, `cancellation_reason`, `rating`), coerentes com o desfecho do pedido.
+- Sem registros duplicados na amostra utilizada.
+- Análise temporal exploratória: horários de pico (ex.: final de tarde / noite) apresentam taxas de cancelamento relativamente mais altas; isso é descritivo, não causal.
+
+Gráfico da distribuição das classes:
+
+![Distribuição das classes](images/class_distribution.png)
+
+---
+
+## 6. Tratamento e preparação dos dados
+
+1. Criação do alvo: `cancelled = 1` se `status == 'cancelled'`, senão `0`.
+2. Extração de `order_hour` e `order_weekday` a partir de `order_timestamp`.
+3. Seleção de features disponíveis no momento do pedido.
+4. Divisão estratificada:
+   - 80% treino+validação / 20% teste
+   - Do treino+validação: 75% treino / 25% validação  
+   → aproximadamente 1.200 treino / 400 validação / 400 teste
+5. Pré-processamento dentro de **pipelines** do scikit-learn (ex.: `StandardScaler` apenas no treino, aplicado depois na validação/teste) para evitar vazamento.
+
+---
+
+## 7. Features utilizadas
+
+| Feature                   | Descrição                              |
+|---------------------------|----------------------------------------|
+| `item_count`              | Quantidade de itens                    |
+| `subtotal`                | Valor dos produtos                     |
+| `delivery_fee`            | Taxa de entrega                        |
+| `estimated_delivery_min`  | Tempo estimado de entrega              |
+| `order_hour`              | Hora do pedido                         |
+| `order_weekday`           | Dia da semana (0=segunda … 6=domingo)  |
+
+---
+
+## 8. Justificativa para exclusão de variáveis
+
+| Variável                 | Motivo da exclusão                                      |
+|--------------------------|---------------------------------------------------------|
+| `actual_delivery_min`    | Só conhecida após a entrega                             |
+| `cancellation_reason`    | Só conhecida após o cancelamento                        |
+| `rating`                 | Avaliação posterior ao pedido                           |
+| `id`, `customer_id`, `restaurant_id`, `driver_id` | Identificadores; disponibilidade no momento da previsão é questionável |
+| `tip`, `total`           | Podem não estar fechados ou ser redundantes no instante da previsão |
+
+Usar qualquer uma dessas colunas como feature introduziria **data leakage** ou informação indisponível na prática.
+
+---
+
+## 9. Modelos testados
+
+### Baseline
+- `DummyClassifier(strategy='most_frequent')`
+- Sempre prevê a classe majoritária (entregue)
+- Acurácia no teste ≈ **0,915** — referência, não solução
+
+### Regressão Logística
+- Pipeline: `StandardScaler` + `LogisticRegression`
+- `class_weight='balanced'`, `random_state=42`, `max_iter=1000`
+
+### Random Forest
+- `n_estimators=300`, `max_depth=5`
+- `min_samples_split=10`, `min_samples_leaf=5`
+- `class_weight='balanced'`, `random_state=42`, `n_jobs=-1`
+
+---
+
+## 10. Métricas e resultados (reexecutados)
+
+Os números abaixo foram **reexecutados** no notebook deste repositório, com a mesma divisão estratificada (`random_state=42`) e os mesmos hiperparâmetros.  
+Thresholds ótimos para F1 foram escolhidos **apenas na validação**.
+
+### Validação — threshold 0,50
+
+| Métrica    | Regressão Logística | Random Forest |
+|------------|--------------------:|--------------:|
+| Accuracy   | 0,4950              | 0,6325        |
+| Precision  | 0,0927              | 0,1111        |
+| Recall     | 0,5429              | 0,4571        |
+| F1-score   | 0,1583              | 0,1788        |
+| PR-AUC     | 0,1240              | 0,1668        |
+| ROC-AUC    | 0,5354              | 0,5220        |
+
+### Validação — threshold que maximiza F1
+
+| Modelo               | Threshold | Precision | Recall | F1-score |
+|----------------------|----------:|----------:|-------:|---------:|
+| Regressão Logística  | ≈ 0,5332  | 0,1133    | 0,4857 | 0,1838   |
+| Random Forest        | ≈ 0,5997  | 0,3077    | 0,2286 | 0,2623   |
+
+**Matriz de confusão — Regressão Logística (th ≈ 0,533)**
+
+```text
+[[232, 133],
+ [ 18,  17]]
+```
+
+**Matriz de confusão — Random Forest (th ≈ 0,600)**
+
+```text
+[[347,  18],
+ [ 27,   8]]
+```
+
+![Matriz de confusão — Regressão Logística](images/confusion_matrix_logistic_regression.png)
+
+![Matriz de confusão — Random Forest](images/confusion_matrix_random_forest.png)
+
+### Importância das features (Random Forest)
+
+| Feature                  | Importância |
+|--------------------------|------------:|
+| `subtotal`               | ≈ 0,296     |
+| `estimated_delivery_min` | ≈ 0,237     |
+| `order_weekday`          | ≈ 0,226     |
+| `order_hour`             | ≈ 0,187     |
+| `item_count`             | ≈ 0,054     |
+| `delivery_fee`           | 0,000       |
+
+![Importância das features](images/feature_importance.png)
+
+![Curva Precision-Recall](images/precision_recall_curve.png)
+
+---
+
+## 11. Comparação entre modelos
+
+- **Regressão Logística** (com threshold ajustado): maior **recall** → identifica mais cancelamentos, porém com muitos falsos positivos.
+- **Random Forest** (com threshold ajustado): maior **precision** e **F1** → menos alertas incorretos, porém deixa passar mais cancelamentos.
+- Nenhum modelo apresenta desempenho forte o suficiente para uso operacional com as features e o volume atuais.
+- A escolha depende do **custo de negócio** de falso positivo vs. falso negativo.
+
+---
+
+## 12. Discussão sobre desbalanceamento
+
+Com 8,6% de cancelamentos:
+
+- Acurácia alta é fácil de obter e pouco informativa.
+- Precision tende a ser baixa quando o modelo tenta aumentar o recall.
+- PR-AUC é mais adequada que ROC-AUC em cenários muito desbalanceados (embora ambas sejam reportadas).
+- `class_weight='balanced'` ajuda o otimizador a não ignorar a classe minoritária, mas não resolve sozinho a dificuldade do problema.
+
+---
+
+## 13. Limitações do projeto
+
+1. Dados sintéticos — generalização para o mundo real não é garantida.
+2. Amostra pequena e poucos eventos da classe positiva.
+3. Capacidade preditiva ainda modesta.
+4. Features restritas ao que está disponível no momento do pedido.
+5. O conjunto de teste já foi utilizado em avaliações anteriores da Regressão Logística; não deve ser tratado como “intocado” em relatos de performance final. Para uma avaliação independente seria necessário novo protocolo ou dados externos.
+6. Resultados de threshold e matrizes de confusão de execuções antigas continham pequenas divergências; os números deste README e do notebook foram **reconfirmados** na execução atual.
+
+---
+
+## 14. Como reproduzir o experimento
+
+```bash
+# 1. Clone o repositório
+git clone https://github.com/rodrigocataoc/order-cancellation-prediction.git
+cd order-cancellation-prediction
+
+# 2. Ambiente virtual (recomendado)
+python -m venv .venv
+source .venv/bin/activate   # Linux/macOS
+# .venv\Scripts\activate    # Windows
+
+# 3. Dependências
+pip install -r requirements.txt
+
+# 4. Baixe o dataset
+#    - Acesse https://huggingface.co/datasets/mindweave/food-delivery-orders
+#    - Salve data/orders.csv (ver data/README.md)
+
+# 5. Abra e execute o notebook
+jupyter notebook notebooks/01_data_exploration.ipynb
+```
+
+Execute as células em ordem. Os gráficos e métricas serão gerados localmente.
+
+---
+
+## 15. Tecnologias utilizadas
+
+- Python 3
+- pandas, NumPy
+- scikit-learn (Pipeline, LogisticRegression, RandomForestClassifier, métricas)
+- matplotlib, seaborn
+- Jupyter Notebook
+
+---
+
+## 16. Estrutura do repositório
+
+```text
+order-cancellation-prediction/
+├── README.md
+├── requirements.txt
+├── .gitignore
+├── data/
+│   └── README.md          # instruções de download (CSV não versionado)
+├── notebooks/
+│   └── 01_data_exploration.ipynb
+└── images/
+    ├── class_distribution.png
+    ├── confusion_matrix_logistic_regression.png
+    ├── confusion_matrix_random_forest.png
+    ├── precision_recall_curve.png
+    └── feature_importance.png
+```
+
+---
+
+## 17. Fonte e licença dos dados
+
+- **Fonte:** [mindweave/food-delivery-orders](https://huggingface.co/datasets/mindweave/food-delivery-orders)
+- **Licença dos dados:** [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) — atribuição obrigatória; uso comercial **não** permitido.
+- O código e a documentação deste repositório são de autoria do projeto de portfólio; reutilize com atribuição quando fizer sentido.
+
+---
+
+## Aprendizados e honestidade técnica
+
+Este projeto prioriza:
+
+- Clareza sobre o que o modelo **consegue e não consegue** fazer
+- Documentação de limitações e de decisões (features, leakage, métricas)
+- Reprodução e verificação de resultados em vez de números “bonitos”
+
+Resultados modestos, bem explicados e tecnicamente corretos, são preferíveis a performance inflada ou documentação incompleta.
+
+---
+
+**Repositório:** https://github.com/rodrigocataoc/order-cancellation-prediction  
 **Autor:** Rodrigo Catão
-
-**Repositório:** `order-cancellation-prediction`
-
-**Fonte dos dados:** [mindweave/food-delivery-orders — Hugging Face](https://huggingface.co/datasets/mindweave/food-delivery-orders)

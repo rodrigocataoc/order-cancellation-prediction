@@ -70,7 +70,7 @@ O arquivo de dados **não** está no repositório. Veja `data/README.md` para in
 
 Gráfico da distribuição das classes:
 
-![Distribuição das classes](images/class_distribution.png)
+![Distribuição das classes](images/class_distribution.svg)
 
 ---
 
@@ -169,9 +169,7 @@ Thresholds ótimos para F1 foram escolhidos **apenas na validação**.
  [ 27,   8]]
 ```
 
-![Matriz de confusão — Regressão Logística](images/confusion_matrix_logistic_regression.png)
-
-![Matriz de confusão — Random Forest](images/confusion_matrix_random_forest.png)
+> Gráficos PNG das matrizes de confusão e da curva Precision-Recall são gerados ao executar o notebook (`notebooks/01_data_exploration.ipynb`).
 
 ### Importância das features (Random Forest)
 
@@ -184,9 +182,7 @@ Thresholds ótimos para F1 foram escolhidos **apenas na validação**.
 | `item_count`             | ≈ 0,054     |
 | `delivery_fee`           | 0,000       |
 
-![Importância das features](images/feature_importance.png)
-
-![Curva Precision-Recall](images/precision_recall_curve.png)
+![Importância das features](images/feature_importance.svg)
 
 ---
 
@@ -270,11 +266,9 @@ order-cancellation-prediction/
 ├── notebooks/
 │   └── 01_data_exploration.ipynb
 └── images/
-    ├── class_distribution.png
-    ├── confusion_matrix_logistic_regression.png
-    ├── confusion_matrix_random_forest.png
-    ├── precision_recall_curve.png
-    └── feature_importance.png
+    ├── class_distribution.svg
+    ├── feature_importance.svg
+    └── README.md          # como gerar os PNGs a partir do notebook
 ```
 
 ---
